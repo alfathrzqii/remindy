@@ -1,0 +1,84 @@
+name: Build & Release Split APKs
+
+# Trigger: Jalan otomatis setiap kali ada Push Tag yang berawalan 'v'
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build_and_release:
+    name: Build APKs & Release
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Get Dependencies
+        run: flutter pub get
+
+      # --- TAHAP 1: BUILD UNIVERSAL ---
+      - name: Build Universal APK
+        run: flutter build apk --release
+
+      - name: Rename Universal APK
+        # Format: Remindy-v1.0.0-universal.apk
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/Remindy-${{ github.ref_name }}-universal.apk
+
+      # --- TAHAP 2: BUILD SPLIT ---
+      - name: Build Split APKs
+        run: flutter build apk --release --split-per-abi
+
+      - name: Rename Split APKs
+        # Format: Remindy-v1.0.0-arm64-v8a.apk
+        run: |
+          cd build/app/outputs/flutter-apk/
+          mv app-arm64-v8a-release.apk Remindy-${{ github.ref_name }}-arm64-v8a.apk
+          mv app-armeabi-v7a-release.apk Remindy-${{ github.ref_name }}-armeabi-v7a.apk
+          mv app-x86_64-release.apk Remindy-${{ github.ref_name }}-x86_64.apk
+
+      # --- TAHAP 3: UPLOAD KE GITHUB RELEASE ---
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            build/app/outputs/flutter-apk/Remindy-${{ github.ref_name }}-universal.apk
+            build/app/outputs/flutter-apk/Remindy-${{ github.ref_name }}-arm64-v8a.apk
+            build/app/outputs/flutter-apk/Remindy-${{ github.ref_name }}-armeabi-v7a.apk
+            build/app/outputs/flutter-apk/Remindy-${{ github.ref_name }}-x86_64.apk
+            
+          name: Remindy ${{ github.ref_name }}
+          body: |
+            ## 🚀 Update Baru: ${{ github.ref_name }}
+            
+            Silakan download APK sesuai jenis HP kamu:
+            
+            | File | Keterangan |
+            | :--- | :--- |
+            | **Universal** | Aman untuk SEMUA HP |
+            | **arm64-v8a** | HP Android Modern (64-bit) |
+            | **armeabi-v7a** | HP Android Lama (32-bit) |
+            | **x86_64** | Emulator / Laptop |
+            
+            *(Build otomatis by GitHub Actions)*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
