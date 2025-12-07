@@ -12,6 +12,23 @@ class TaskViewModel extends ChangeNotifier {
 
   final NotificationService _notificationService = NotificationService();
 
+  String _filterStatus = 'todo'; 
+  String get filterStatus => _filterStatus;
+
+  List<TaskModel> get filteredTasks {
+    if (_filterStatus == 'todo') {
+      return _tasks.where((t) => t.isCompleted == 0).toList();
+    } else if (_filterStatus == 'completed') {
+      return _tasks.where((t) => t.isCompleted == 1).toList();
+    }
+    return _tasks;
+  }
+
+  void setFilter(String status) {
+    _filterStatus = status;
+    notifyListeners(); // Update UI
+  }
+
   // --- FUNGSI UTAMA ---
   Future<void> fetchTasks() async {
     _isLoading = true;

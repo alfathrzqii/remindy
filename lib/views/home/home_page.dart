@@ -119,120 +119,132 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- WIDGET LIST TUGAS (Dipisahkan biar rapi) ---
+  // --- WIDGET LIST TUGAS (Updated: Dengan Filter Chips) ---
   Widget _buildTaskList(TaskViewModel taskViewModel) {
     if (taskViewModel.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    
-    if (taskViewModel.tasks.isEmpty) {
-      return _buildEmptyState();
-    }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(0, 8, 0, 80),
-      itemCount: taskViewModel.tasks.length,
-      itemBuilder: (context, index) {
-        final task = taskViewModel.tasks[index];
-        
-        // Bungkus TaskCard dengan Dismissible agar bisa digeser
-        return Dismissible(
-          key: ValueKey(task.id), // ID Unik wajib ada
-          direction: DismissDirection.endToStart, // Geser dari kanan ke kiri
-          
-          // Background Merah (Tong Sampah) saat digeser
-          background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 20),
-            margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.redAccent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: const Icon(Icons.delete, color: Colors.white, size: 30),
+    // LIST FILTERED (Mengambil data yang sudah disaring)
+    final displayTasks = taskViewModel.filteredTasks;
+
+    return Column(
+      children: [
+        // 1. BAGIAN FILTER CHIPS
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              _buildFilterChip(taskViewModel, 'To-do', 'todo'),
+              const SizedBox(width: 8),
+              _buildFilterChip(taskViewModel, 'Selesai', 'completed'),
+              const SizedBox(width: 8),
+              _buildFilterChip(taskViewModel, 'Semua', 'all'),
+            ],
           ),
-          
-          // Dialog Konfirmasi sebelum hapus (Opsional tapi disarankan)
-          confirmDismiss: (direction) async {
-            return await showDialog(
-              context: context,
-              builder: (BuildContext context) {
-                return AlertDialog(
-                  backgroundColor: const Color(0xFF2C2C2C),
-                  title: const Text("Hapus Tugas?", style: TextStyle(color: Colors.white)),
-                  content: Text(
-                    "Apakah kamu yakin ingin menghapus '${task.title}'?",
-                    style: const TextStyle(color: Colors.white70),
-                  ),
-                  actions: <Widget>[
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(false), // Batal
-                      child: const Text("Batal", style: TextStyle(color: Colors.grey)),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(true), // Hapus
-                      child: const Text("Hapus", style: TextStyle(color: Colors.redAccent)),
-                    ),
-                  ],
-                );
-              },
-            );
-          },
+        ),
 
-          // Aksi saat benar-benar digeser (Hapus dari DB)
-          onDismissed: (direction) {
-            taskViewModel.deleteTask(task.id!);
-            
-            // Tampilkan feedback snackbar
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text("${task.title} dihapus"),
-                action: SnackBarAction(
-                  label: 'Undo',
-                  // Fitur Undo sederhana (tambah lagi tugas yang sama)
-                  onPressed: () => taskViewModel.addTask(task), 
+        // 2. BAGIAN LIST TUGAS
+        Expanded(
+          child: displayTasks.isEmpty
+              ? _buildEmptyStateFiltered(taskViewModel.filterStatus)
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(0, 0, 0, 80),
+                  itemCount: displayTasks.length,
+                  itemBuilder: (context, index) {
+                    final task = displayTasks[index];
+                    return Dismissible(
+                      key: ValueKey(task.id),
+                      direction: DismissDirection.endToStart,
+                      background: Container(
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 20),
+                        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.delete, color: Colors.white, size: 30),
+                      ),
+                      confirmDismiss: (direction) async {
+                        return await showDialog(
+                          context: context,
+                          builder: (BuildContext context) {
+                            return AlertDialog(
+                              backgroundColor: const Color(0xFF2C2C2C),
+                              title: const Text("Hapus Tugas?", style: TextStyle(color: Colors.white)),
+                              content: Text("Hapus '${task.title}'?", style: const TextStyle(color: Colors.white70)),
+                              actions: <Widget>[
+                                TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text("Batal", style: TextStyle(color: Colors.grey))),
+                                TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text("Hapus", style: TextStyle(color: Colors.redAccent))),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                      onDismissed: (direction) {
+                        taskViewModel.deleteTask(task.id!);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("${task.title} dihapus")),
+                        );
+                      },
+                      child: TaskCard(
+                        task: task,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AddTaskPage(task: task),
+                          ),
+                        ),
+                        onCheckboxChanged: (value) => taskViewModel.toggleTaskStatus(task),
+                      ),
+                    );
+                  },
                 ),
-              ),
-            );
-          },
-
-          // Isi utamanya tetap TaskCard
-          child: TaskCard(
-            task: task,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AddTaskPage(task: task),
-                ),
-              );
-            },
-            onCheckboxChanged: (value) {
-              taskViewModel.toggleTaskStatus(task);
-            },
-          ),
-        );
-      },
+        ),
+      ],
+    );
+  }
+  
+  // Widget Helper untuk Chip Filter
+  Widget _buildFilterChip(TaskViewModel viewModel, String label, String value) {
+    final isSelected = viewModel.filterStatus == value;
+    return FilterChip(
+      label: Text(label),
+      selected: isSelected,
+      onSelected: (_) => viewModel.setFilter(value),
+      backgroundColor: const Color(0xFF2C2C2C),
+      selectedColor: Colors.blueAccent,
+      checkmarkColor: Colors.white,
+      labelStyle: TextStyle(
+        color: isSelected ? Colors.white : Colors.white70,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: isSelected ? Colors.transparent : Colors.white12,
+        ),
+      ),
     );
   }
 
-  Widget _buildEmptyState() {
+  // Tampilan kosong khusus jika filter tidak menemukan hasil
+  Widget _buildEmptyStateFiltered(String filter) {
+    String message = "Belum ada tugas";
+    if (filter == 'todo') message = "Hore! Semua tugas selesai 🎉";
+    if (filter == 'completed') message = "Belum ada yang selesai";
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(Icons.task_alt, size: 80, color: Colors.white24),
+        children: [
+          Icon(Icons.filter_list_off, size: 60, color: Colors.white24),
           SizedBox(height: 16),
-          Text(
-            "Belum ada tugas",
-            style: TextStyle(color: Colors.white54, fontSize: 16),
-          ),
-          Text(
-            "Yuk mulai produktif hari ini!",
-            style: TextStyle(color: Colors.white30, fontSize: 14),
-          ),
+          Text(message, style: TextStyle(color: Colors.white54, fontSize: 16)),
         ],
       ),
     );
   }
+
 }
